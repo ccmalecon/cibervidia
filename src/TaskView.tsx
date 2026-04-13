@@ -90,6 +90,16 @@ export function TaskView({ taskId, onBack }: Props) {
           </button>
         )}
 
+        {/* Done — go to video list */}
+        {isDone && (
+          <button
+            onClick={onBack}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium mb-6 cursor-pointer"
+          >
+            Ir al listado de videos
+          </button>
+        )}
+
         {/* Logs */}
         <div className="bg-gray-900 rounded-lg overflow-hidden">
           <div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
