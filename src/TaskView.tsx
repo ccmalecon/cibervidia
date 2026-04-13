@@ -10,9 +10,10 @@ const LEVEL_COLORS: Record<string, string> = {
 interface Props {
   taskId: string
   onBack: () => void
+  onComplete: (taskId: string) => void
 }
 
-export function TaskView({ taskId, onBack }: Props) {
+export function TaskView({ taskId, onBack, onComplete }: Props) {
   const [task, setTask] = useState<TaskDetail | null>(null)
   const [started, setStarted] = useState(false)
 
@@ -90,13 +91,13 @@ export function TaskView({ taskId, onBack }: Props) {
           </button>
         )}
 
-        {/* Done — go to video list */}
+        {/* Done — view outputs */}
         {isDone && (
           <button
-            onClick={onBack}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium mb-6 cursor-pointer"
+            onClick={() => onComplete(taskId)}
+            className="w-full py-3 bg-green-600 hover:bg-green-500 rounded-lg font-medium mb-6 cursor-pointer"
           >
-            Ir al listado de videos
+            Ver videos generados
           </button>
         )}
 

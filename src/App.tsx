@@ -1,92 +1,167 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { JobStatus, VideoSummary } from './types'
 import { HomeView } from './HomeView'
 import { UploadView } from './UploadView'
 import { ProcessingView } from './ProcessingView'
 import { EditorView } from './EditorView'
 import { TaskView } from './TaskView'
+import { OutputView } from './OutputView'
 import { getVideo } from './api'
 
-type View = 'home' | 'upload' | 'processing' | 'editor' | 'task'
+function useRoute() {
+  const [path, setPath] = useState(window.location.pathname)
+
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  const navigate = useCallback((to: string) => {
+    window.history.pushState(null, '', to)
+    setPath(to)
+  }, [])
+
+  return { path, navigate }
+}
 
 export default function App() {
-  const [view, setView] = useState<View>('home')
+  const { path, navigate } = useRoute()
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobData, setJobData] = useState<JobStatus | null>(null)
-  const [taskId, setTaskId] = useState<string | null>(null)
 
-  if (view === 'home') {
-    return (
-      <HomeView
-        onUpload={() => setView('upload')}
-        onSelectVideo={async (video: VideoSummary) => {
-          if (video.status === 'ready' && video.stream_uid) {
-            // Load full video data from D1
-            const full = await getVideo(video.id)
-            setJobData({
-              id: full.id,
-              status: 'ready',
-              streamUid: full.stream_uid || undefined,
-              transcript: full.transcript_words ? {
-                text: full.transcript_text || '',
-                words: full.transcript_words,
-              } : undefined,
-              blocks: full.blocks || undefined,
-            })
-            setView('editor')
-          } else if (video.status === 'processing' || video.status === 'uploading') {
-            setJobId(video.id)
-            setView('processing')
-          }
-        }}
-      />
-    )
-  }
-
-  if (view === 'upload') {
+  // Route: /upload
+  if (path === '/upload') {
     return (
       <UploadView
         onJobStarted={(id) => {
           setJobId(id)
-          setView('processing')
+          navigate(`/processing/${id}`)
         }}
       />
     )
   }
 
-  if (view === 'processing' && jobId) {
+  // Route: /processing/:id (video upload processing)
+  const processingMatch = path.match(/^\/processing\/(.+)$/)
+  if (processingMatch) {
+    const id = jobId || processingMatch[1]
     return (
       <ProcessingView
-        jobId={jobId}
+        jobId={id}
         onReady={(job) => {
           setJobData(job)
-          setView('editor')
+          navigate(`/editor/${job.id}`)
         }}
       />
     )
   }
 
-  if (view === 'editor' && jobData) {
+  // Route: /editor/:id
+  const editorMatch = path.match(/^\/editor\/(.+)$/)
+  if (editorMatch) {
+    const videoId = editorMatch[1]
+
+    if (jobData && jobData.id === videoId) {
+      return (
+        <EditorView
+          job={jobData}
+          onTaskCreated={(taskId) => navigate(`/process/${taskId}`)}
+          onBack={() => navigate('/')}
+        />
+      )
+    }
+
+    // Load from D1
     return (
-      <EditorView
-        job={jobData}
-        onTaskCreated={(id) => {
-          setTaskId(id)
-          setView('task')
-        }}
-        onBack={() => setView('home')}
+      <EditorLoader
+        videoId={videoId}
+        onLoaded={(job) => setJobData(job)}
+        onTaskCreated={(taskId) => navigate(`/process/${taskId}`)}
+        onBack={() => navigate('/')}
       />
     )
   }
 
-  if (view === 'task' && taskId) {
+  // Route: /process/:taskId
+  const processMatch = path.match(/^\/process\/(.+)$/)
+  if (processMatch) {
     return (
       <TaskView
-        taskId={taskId}
-        onBack={() => setView('home')}
+        taskId={processMatch[1]}
+        onBack={() => navigate('/')}
+        onComplete={(taskId) => navigate(`/output/${taskId}`)}
       />
     )
   }
 
-  return null
+  // Route: /output/:taskId
+  const outputMatch = path.match(/^\/output\/(.+)$/)
+  if (outputMatch) {
+    return (
+      <OutputView
+        taskId={outputMatch[1]}
+        onBack={() => navigate('/')}
+      />
+    )
+  }
+
+  // Default: Home
+  return (
+    <HomeView
+      onUpload={() => navigate('/upload')}
+      onSelectVideo={async (video: VideoSummary) => {
+        if (video.status === 'ready' && video.stream_uid) {
+          const full = await getVideo(video.id)
+          setJobData({
+            id: full.id,
+            status: 'ready',
+            streamUid: full.stream_uid || undefined,
+            transcript: full.transcript_words ? {
+              text: full.transcript_text || '',
+              words: full.transcript_words,
+            } : undefined,
+            blocks: full.blocks || undefined,
+          })
+          navigate(`/editor/${video.id}`)
+        } else if (video.status === 'processing' || video.status === 'uploading') {
+          setJobId(video.id)
+          navigate(`/processing/${video.id}`)
+        }
+      }}
+    />
+  )
+}
+
+// Loads video data from D1 then renders EditorView
+function EditorLoader({ videoId, onLoaded, onTaskCreated, onBack }: {
+  videoId: string
+  onLoaded: (job: JobStatus) => void
+  onTaskCreated: (taskId: string) => void
+  onBack: () => void
+}) {
+  const [job, setJob] = useState<JobStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getVideo(videoId).then((full) => {
+      const j: JobStatus = {
+        id: full.id,
+        status: 'ready',
+        streamUid: full.stream_uid || undefined,
+        transcript: full.transcript_words ? {
+          text: full.transcript_text || '',
+          words: full.transcript_words,
+        } : undefined,
+        blocks: full.blocks || undefined,
+      }
+      setJob(j)
+      onLoaded(j)
+    }).catch((err) => setError(err.message))
+  }, [videoId, onLoaded])
+
+  if (error) return <div className="min-h-screen bg-gray-950 text-red-400 flex items-center justify-center">{error}</div>
+  if (!job) return <div className="min-h-screen bg-gray-950 text-gray-500 flex items-center justify-center">Cargando video...</div>
+
+  return <EditorView job={job} onTaskCreated={onTaskCreated} onBack={onBack} />
 }
