@@ -1,10 +1,11 @@
 import { useRef, useState, useCallback } from 'react'
 import { Stream } from '@cloudflare/stream-react'
 import type { StreamPlayerApi } from '@cloudflare/stream-react'
-import type { JobStatus, Segment, ThematicBlock, TranscriptWord } from './types'
+import type { JobStatus, Segment } from './types'
 import { formatTime } from './utils'
 import { Timeline } from './Timeline'
 import { SegmentList } from './SegmentList'
+import { TranscriptPanel } from './TranscriptPanel'
 
 const STREAM_CUSTOMER_CODE = import.meta.env.VITE_STREAM_CUSTOMER_CODE || 'wh3wnchtu0i0y4kd'
 
@@ -18,7 +19,6 @@ export function EditorView({ job }: Props) {
   const [duration, setDuration] = useState(0)
   const [segments, setSegments] = useState<Segment[]>([])
   const [lockedSegmentId, setLockedSegmentId] = useState<string | null>(null)
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
 
   const blocks = job.blocks || []
   const words = job.transcript?.words || []
@@ -52,16 +52,14 @@ export function EditorView({ job }: Props) {
     }
   }, [])
 
-  const createSegmentFromBlock = (block: ThematicBlock) => {
-    const exists = segments.find((s) => s.name === block.title)
-    if (exists) return
+  const createSegment = (name: string, inTime: number, outTime: number) => {
     setSegments((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
-        name: block.title,
-        inTime: block.startTime,
-        outTime: block.endTime,
+        name,
+        inTime,
+        outTime,
       },
     ])
   }
@@ -75,33 +73,18 @@ export function EditorView({ job }: Props) {
     if (lockedSegmentId === id) setLockedSegmentId(null)
   }
 
-  // Find which block a time falls in
-  const activeBlock = blocks.find((b) => currentTime >= b.startTime && currentTime <= b.endTime)
-
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="flex h-screen">
-        {/* Left panel: Transcript blocks */}
-        <div className="w-96 border-r border-gray-800 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-gray-800">
-            <h2 className="font-bold text-lg">Bloques tematicos</h2>
-            <p className="text-gray-500 text-xs mt-1">{blocks.length} bloques detectados</p>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {blocks.map((block) => (
-              <BlockCard
-                key={block.id}
-                block={block}
-                isActive={activeBlock?.id === block.id}
-                isSelected={selectedBlockId === block.id}
-                currentTime={currentTime}
-                onPlay={() => playFrom(block.startTime)}
-                onSelect={() => setSelectedBlockId(selectedBlockId === block.id ? null : block.id)}
-                onCreateSegment={() => createSegmentFromBlock(block)}
-              />
-            ))}
-          </div>
-        </div>
+        {/* Left panel: Transcript */}
+        <TranscriptPanel
+          blocks={blocks}
+          words={words}
+          currentTime={currentTime}
+          onPlay={playFrom}
+          onSeek={seekTo}
+          onCreateSegment={createSegment}
+        />
 
         {/* Right panel: Video + segments */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -143,13 +126,6 @@ export function EditorView({ job }: Props) {
             </div>
           )}
 
-          {/* Active transcript word highlight */}
-          {words.length > 0 && (
-            <div className="px-4 py-2 bg-gray-900/50 border-y border-gray-800">
-              <WordHighlight words={words} currentTime={currentTime} onWordClick={seekTo} />
-            </div>
-          )}
-
           {/* Segments */}
           <div className="flex-1 overflow-y-auto px-4 pb-4">
             <SegmentList
@@ -172,113 +148,6 @@ export function EditorView({ job }: Props) {
         </div>
       </div>
     </div>
-  )
-}
-
-function BlockCard({
-  block,
-  isActive,
-  isSelected,
-  currentTime,
-  onPlay,
-  onSelect,
-  onCreateSegment,
-}: {
-  block: ThematicBlock
-  isActive: boolean
-  isSelected: boolean
-  currentTime: number
-  onPlay: () => void
-  onSelect: () => void
-  onCreateSegment: () => void
-}) {
-  const progress = isActive
-    ? Math.min(100, ((currentTime - block.startTime) / (block.endTime - block.startTime)) * 100)
-    : 0
-
-  return (
-    <div
-      className={`rounded-lg p-3 text-sm transition-colors cursor-pointer ${
-        isActive ? 'bg-blue-900/30 ring-1 ring-blue-600' :
-        isSelected ? 'bg-gray-800 ring-1 ring-gray-600' :
-        'bg-gray-900 hover:bg-gray-800/70'
-      }`}
-      onClick={onSelect}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-medium truncate">{block.title}</h3>
-          <p className="text-gray-500 text-xs mt-1 line-clamp-2">{block.summary}</p>
-          <div className="flex items-center gap-2 mt-2 text-xs font-mono text-gray-500">
-            <span>{formatTime(block.startTime)}</span>
-            <span>-</span>
-            <span>{formatTime(block.endTime)}</span>
-            <span className="text-gray-600">({formatTime(block.endTime - block.startTime)})</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      {isActive && (
-        <div className="mt-2 h-0.5 bg-gray-700 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-500 transition-all" style={{ width: `${progress}%` }} />
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex gap-2 mt-2">
-        <button
-          onClick={(e) => { e.stopPropagation(); onPlay() }}
-          className="px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-xs cursor-pointer"
-        >
-          Play
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onCreateSegment() }}
-          className="px-2 py-1 bg-green-800 hover:bg-green-700 rounded text-xs cursor-pointer"
-        >
-          + Segmento
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function WordHighlight({
-  words,
-  currentTime,
-  onWordClick,
-}: {
-  words: TranscriptWord[]
-  currentTime: number
-  onWordClick: (time: number) => void
-}) {
-  // Show a window of words around current time
-  const currentIdx = words.findIndex((w) => w.start <= currentTime && w.end >= currentTime)
-  const start = Math.max(0, (currentIdx >= 0 ? currentIdx : 0) - 20)
-  const end = Math.min(words.length, start + 50)
-  const visible = words.slice(start, end)
-
-  return (
-    <p className="text-sm leading-relaxed">
-      {visible.map((w, i) => {
-        const isActive = currentTime >= w.start && currentTime <= w.end
-        const isPast = currentTime > w.end
-        return (
-          <span
-            key={start + i}
-            onClick={() => onWordClick(w.start)}
-            className={`cursor-pointer transition-colors ${
-              isActive ? 'text-blue-400 font-bold' :
-              isPast ? 'text-gray-400' :
-              'text-gray-600'
-            }`}
-          >
-            {w.word}{' '}
-          </span>
-        )
-      })}
-    </p>
   )
 }
 

@@ -20,6 +20,14 @@ export interface ThematicBlock {
   words: TranscriptWord[]
 }
 
+export interface LogEntry {
+  ts: string
+  step: string
+  msg: string
+  level: 'info' | 'error' | 'warn'
+  data?: unknown
+}
+
 export interface JobStatus {
   id: string
   status: 'uploading' | 'processing' | 'transcribing' | 'analyzing' | 'ready' | 'done' | 'error'
@@ -29,5 +37,6 @@ export interface JobStatus {
     words: TranscriptWord[]
   }
   blocks?: ThematicBlock[]
+  logs?: LogEntry[]
   error?: string
 }

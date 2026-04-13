@@ -61,6 +61,7 @@ export async function getTranscript(id: string): Promise<{
   streamUid?: string
   transcript?: { text: string; words: import('./types').TranscriptWord[] }
   blocks?: import('./types').ThematicBlock[]
+  logs?: import('./types').LogEntry[]
   error?: string
 }> {
   return request(`/transcribe/${id}`)

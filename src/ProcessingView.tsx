@@ -1,29 +1,39 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getJobStatus, startTranscription, getTranscript } from './api'
-import type { JobStatus } from './types'
+import type { JobStatus, LogEntry } from './types'
 
 interface Props {
   jobId: string
   onReady: (job: JobStatus) => void
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  uploading: 'Subiendo video...',
-  processing: 'Extrayendo audio y subiendo a Stream...',
-  transcribing: 'Transcribiendo con Whisper...',
-  analyzing: 'Analizando bloques tematicos con IA...',
-  ready: 'Listo!',
-  error: 'Error',
+const STEP_LABELS: Record<string, string> = {
+  init: 'Inicializacion',
+  complete: 'Upload completo',
+  stream: 'Cloudflare Stream',
+  ffmpeg: 'FFmpeg container',
+  transcribe: 'Transcripcion',
+  whisper: 'Whisper API',
+  claude: 'Claude API',
+  'transcribe-error': 'Error',
+}
+
+const LEVEL_COLORS: Record<string, string> = {
+  info: 'text-gray-400',
+  warn: 'text-yellow-400',
+  error: 'text-red-400',
 }
 
 export function ProcessingView({ jobId, onReady }: Props) {
   const [status, setStatus] = useState<JobStatus | null>(null)
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [transcriptionStarted, setTranscriptionStarted] = useState(false)
 
   const poll = useCallback(async () => {
     try {
       const job = await getJobStatus(jobId)
       setStatus(job)
+      if (job.logs) setLogs(job.logs)
 
       // When audio extraction is done, start transcription
       if (job.status === 'done' && !transcriptionStarted) {
@@ -32,9 +42,10 @@ export function ProcessingView({ jobId, onReady }: Props) {
         return
       }
 
-      // When transcription started, poll the transcript endpoint
+      // Poll transcript endpoint when transcription is active
       if (transcriptionStarted && job.status !== 'error') {
         const transcript = await getTranscript(jobId)
+        if (transcript.logs) setLogs(transcript.logs as LogEntry[])
         if (transcript.status === 'ready') {
           onReady({
             ...job,
@@ -59,40 +70,57 @@ export function ProcessingView({ jobId, onReady }: Props) {
   }, [poll])
 
   const step = status?.status || 'processing'
-  const steps = ['processing', 'transcribing', 'analyzing', 'ready']
-  const currentIdx = steps.indexOf(step === 'done' ? 'transcribing' : step)
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8 text-center">
-        <h1 className="text-2xl font-bold">Procesando video</h1>
-
-        {/* Steps */}
-        <div className="space-y-4 text-left">
-          {steps.map((s, i) => (
-            <div key={s} className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                i < currentIdx ? 'bg-green-600' :
-                i === currentIdx ? 'bg-blue-600 animate-pulse' :
-                'bg-gray-800'
-              }`}>
-                {i < currentIdx ? '\u2713' : i + 1}
-              </div>
-              <span className={`text-sm ${i <= currentIdx ? 'text-gray-100' : 'text-gray-600'}`}>
-                {STATUS_LABELS[s] || s}
-              </span>
-            </div>
-          ))}
+      <div className="w-full max-w-2xl space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Procesando video</h1>
+          <p className="text-gray-500 text-sm mt-1 font-mono">Job: {jobId}</p>
+          <p className="text-sm mt-2">
+            Estado: <span className={`font-bold ${step === 'error' ? 'text-red-400' : 'text-blue-400'}`}>{step}</span>
+          </p>
         </div>
 
-        {/* Error */}
-        {status?.status === 'error' && (
+        {/* Error banner */}
+        {status?.error && (
           <div className="bg-red-900/30 border border-red-700 rounded-lg p-4">
-            <p className="text-red-400 text-sm">{status.error || 'Error desconocido'}</p>
+            <p className="text-red-400 text-sm font-mono break-all">{status.error}</p>
           </div>
         )}
 
-        <p className="text-gray-600 text-xs">Esto puede tardar unos minutos dependiendo de la duracion del video</p>
+        {/* Live logs */}
+        <div className="bg-gray-900 rounded-lg overflow-hidden">
+          <div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+            <span className="text-sm font-medium">Logs ({logs.length})</span>
+            <span className="text-xs text-gray-500 font-mono">auto-refresh 3s</span>
+          </div>
+          <div className="max-h-96 overflow-y-auto p-3 space-y-1 font-mono text-xs">
+            {logs.length === 0 ? (
+              <p className="text-gray-600">Esperando logs...</p>
+            ) : (
+              logs.map((log, i) => (
+                <div key={i} className={`flex gap-2 ${LEVEL_COLORS[log.level] || 'text-gray-400'}`}>
+                  <span className="text-gray-600 shrink-0">
+                    {new Date(log.ts).toLocaleTimeString()}
+                  </span>
+                  <span className={`shrink-0 px-1 rounded ${
+                    log.level === 'error' ? 'bg-red-900/50' :
+                    log.level === 'warn' ? 'bg-yellow-900/50' :
+                    'bg-gray-800'
+                  }`}>
+                    {STEP_LABELS[log.step] || log.step}
+                  </span>
+                  <span className="break-all">{log.msg}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <p className="text-gray-600 text-xs text-center">
+          Esto puede tardar unos minutos dependiendo de la duracion del video
+        </p>
       </div>
     </div>
   )
