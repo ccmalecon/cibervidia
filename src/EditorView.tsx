@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { Stream } from '@cloudflare/stream-react'
 import type { StreamPlayerApi } from '@cloudflare/stream-react'
-import type { JobStatus, Segment } from './types'
+import type { JobStatus, Segment, TranscriptWord } from './types'
 import { formatTime } from './utils'
 import { Timeline } from './Timeline'
 import { SegmentList } from './SegmentList'
@@ -91,9 +91,9 @@ export function EditorView({ job }: Props) {
 
         {/* Right panel: Video + segments */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Player */}
-          <div className="bg-gray-900 p-4">
-            <div className="max-w-2xl mx-auto">
+          {/* Player — compact */}
+          <div className="bg-gray-900 p-3">
+            <div className="max-w-lg mx-auto">
               {job.streamUid ? (
                 <Stream
                   src={job.streamUid}
@@ -112,7 +112,11 @@ export function EditorView({ job }: Props) {
                 </div>
               )}
             </div>
-            <div className="max-w-2xl mx-auto mt-2 text-sm text-gray-400 font-mono text-center">
+            {/* Karaoke words under video */}
+            <div className="max-w-lg mx-auto mt-2 min-h-[2rem] flex items-center justify-center">
+              <KaraokeBar words={words} currentTime={currentTime} onWordClick={seekTo} />
+            </div>
+            <div className="max-w-lg mx-auto mt-1 text-xs text-gray-500 font-mono text-center">
               {formatTime(currentTime)} / {formatTime(duration)}
             </div>
           </div>
@@ -153,6 +157,49 @@ export function EditorView({ job }: Props) {
         </div>
       </div>
     </div>
+  )
+}
+
+function KaraokeBar({
+  words,
+  currentTime,
+  onWordClick,
+}: {
+  words: TranscriptWord[]
+  currentTime: number
+  onWordClick: (time: number) => void
+}) {
+  if (words.length === 0) return null
+
+  // Find current word index
+  const currentIdx = words.findIndex((w) => w.start <= currentTime && w.end >= currentTime)
+  // Show a window of words around current position
+  const center = currentIdx >= 0 ? currentIdx : words.findIndex((w) => w.start > currentTime) - 1
+  const start = Math.max(0, center - 6)
+  const end = Math.min(words.length, start + 14)
+  const visible = words.slice(start, end)
+
+  return (
+    <p className="text-sm text-center leading-relaxed">
+      {visible.map((w, i) => {
+        const idx = start + i
+        const isActive = currentTime >= w.start && currentTime <= w.end
+        const isPast = currentTime > w.end
+        return (
+          <span
+            key={idx}
+            onClick={() => onWordClick(w.start)}
+            className={`cursor-pointer transition-colors ${
+              isActive ? 'text-blue-300 font-bold' :
+              isPast ? 'text-gray-400' :
+              'text-gray-600'
+            }`}
+          >
+            {w.word}{' '}
+          </span>
+        )
+      })}
+    </p>
   )
 }
 
