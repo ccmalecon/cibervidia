@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getJobStatus, startTranscription, getTranscript } from './api'
+import { getJobStatus, startTranscription, getTranscript, retryProcessing } from './api'
 import type { JobStatus, LogEntry } from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.workers.dev'
@@ -97,10 +97,34 @@ export function ProcessingView({ jobId, onReady }: Props) {
           </p>
         </div>
 
-        {/* Error banner */}
+        {/* Error banner + retry */}
         {status?.error && (
-          <div className="bg-red-900/30 border border-red-700 rounded-lg p-4">
+          <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 space-y-3">
             <p className="text-red-400 text-sm font-mono break-all">{status.error}</p>
+            <button
+              onClick={async () => {
+                await retryProcessing(jobId)
+                poll()
+              }}
+              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm font-medium cursor-pointer"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {/* Retry button for stuck processing (no updates for a while) */}
+        {step === 'processing' && !status?.error && logs.length > 0 && (
+          <div className="text-center">
+            <button
+              onClick={async () => {
+                await retryProcessing(jobId)
+                poll()
+              }}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs cursor-pointer text-gray-400"
+            >
+              Reintentar extraccion de audio
+            </button>
           </div>
         )}
 

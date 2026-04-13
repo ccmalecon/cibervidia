@@ -44,6 +44,10 @@ export async function getJobStatus(id: string): Promise<import('./types').JobSta
   return request(`/status/${id}`)
 }
 
+export async function retryProcessing(id: string): Promise<{ id: string; status: string }> {
+  return request(`/upload/${id}/retry`, { method: 'POST' })
+}
+
 // Transcription
 export async function startTranscription(id: string, language?: string): Promise<{ id: string; status: string }> {
   return request(`/transcribe/${id}`, {
