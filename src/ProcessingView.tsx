@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getJobStatus, startTranscription, getTranscript, retryProcessing } from './api'
+import { getJobStatus, retryProcessing } from './api'
 import type { JobStatus, LogEntry } from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.workers.dev'
@@ -12,12 +12,12 @@ interface Props {
 const STEP_LABELS: Record<string, string> = {
   init: 'Inicializacion',
   complete: 'Upload completo',
+  retry: 'Reintento',
   stream: 'Cloudflare Stream',
   ffmpeg: 'FFmpeg container',
   transcribe: 'Transcripcion',
   whisper: 'Whisper API',
   claude: 'Claude API',
-  'transcribe-error': 'Error',
 }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -30,57 +30,58 @@ export function ProcessingView({ jobId, onReady }: Props) {
   const [status, setStatus] = useState<JobStatus | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [containerLogs, setContainerLogs] = useState<string[]>([])
-  const [transcriptionStarted, setTranscriptionStarted] = useState(false)
+  const [workflowStatus, setWorkflowStatus] = useState<string>('')
 
   const poll = useCallback(async () => {
     try {
+      // Poll video from D1 to check if ready
+      const videoResp = await fetch(`${API_BASE}/videos/${jobId}`)
+      if (videoResp.ok) {
+        const video = await videoResp.json() as Record<string, unknown>
+        if (video.status === 'ready') {
+          onReady({
+            id: video.id as string,
+            status: 'ready',
+            streamUid: video.stream_uid as string | undefined,
+            transcript: video.transcript_words ? {
+              text: (video.transcript_text || '') as string,
+              words: video.transcript_words as JobStatus['transcript'] extends undefined ? never : NonNullable<JobStatus['transcript']>['words'],
+            } : undefined,
+            blocks: video.blocks as JobStatus['blocks'],
+          })
+          return
+        }
+      }
+
+      // Poll KV for logs
       const job = await getJobStatus(jobId)
       setStatus(job)
       if (job.logs) setLogs(job.logs)
 
-      // Fetch container logs when processing
-      if (job.status === 'processing' || job.status === 'done') {
-        try {
-          const resp = await fetch(`${API_BASE}/logs/${jobId}`)
-          if (resp.ok) {
-            const text = await resp.text()
-            const lines = text.split('\n').filter(Boolean).slice(-15)
-            setContainerLogs(lines)
-          }
-        } catch {}
-      }
-
-      // When audio extraction is done, start transcription
-      if (job.status === 'done' && !transcriptionStarted) {
-        setTranscriptionStarted(true)
-        await startTranscription(jobId)
-        return
-      }
-
-      // Poll transcript endpoint when transcription is active
-      if (transcriptionStarted && job.status !== 'error') {
-        const transcript = await getTranscript(jobId)
-        if (transcript.logs) setLogs(transcript.logs as LogEntry[])
-        if (transcript.status === 'ready') {
-          onReady({
-            ...job,
-            status: 'ready',
-            streamUid: transcript.streamUid,
-            transcript: transcript.transcript,
-            blocks: transcript.blocks,
-          })
-          return
+      // Poll workflow status
+      try {
+        const wfResp = await fetch(`${API_BASE}/upload/${jobId}/workflow`)
+        if (wfResp.ok) {
+          const wf = await wfResp.json() as { status: string }
+          setWorkflowStatus(wf.status)
         }
-        setStatus((prev) => prev ? { ...prev, status: transcript.status as JobStatus['status'] } : prev)
-      }
-    } catch {
-      // Retry on network errors
-    }
-  }, [jobId, transcriptionStarted, onReady])
+      } catch {}
+
+      // Fetch container logs
+      try {
+        const resp = await fetch(`${API_BASE}/logs/${jobId}`)
+        if (resp.ok) {
+          const text = await resp.text()
+          const lines = text.split('\n').filter(Boolean).slice(-15)
+          setContainerLogs(lines)
+        }
+      } catch {}
+    } catch {}
+  }, [jobId, onReady])
 
   useEffect(() => {
-    const interval = setInterval(poll, 3000)
     poll()
+    const interval = setInterval(poll, 3000)
     return () => clearInterval(interval)
   }, [poll])
 
@@ -94,6 +95,9 @@ export function ProcessingView({ jobId, onReady }: Props) {
           <p className="text-gray-500 text-sm mt-1 font-mono">Job: {jobId}</p>
           <p className="text-sm mt-2">
             Estado: <span className={`font-bold ${step === 'error' ? 'text-red-400' : 'text-blue-400'}`}>{step}</span>
+            {workflowStatus && (
+              <span className="text-gray-500 text-xs ml-2">workflow: {workflowStatus}</span>
+            )}
           </p>
         </div>
 
@@ -113,7 +117,7 @@ export function ProcessingView({ jobId, onReady }: Props) {
           </div>
         )}
 
-        {/* Retry button for stuck processing (no updates for a while) */}
+        {/* Retry button for stuck processing */}
         {step === 'processing' && !status?.error && logs.length > 0 && (
           <div className="text-center">
             <button
@@ -123,7 +127,7 @@ export function ProcessingView({ jobId, onReady }: Props) {
               }}
               className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs cursor-pointer text-gray-400"
             >
-              Reintentar extraccion de audio
+              Reintentar
             </button>
           </div>
         )}
@@ -159,7 +163,7 @@ export function ProcessingView({ jobId, onReady }: Props) {
 
         {/* Container logs */}
         {containerLogs.length > 0 && (
-          <details className="bg-gray-900 rounded-lg overflow-hidden mt-4">
+          <details className="bg-gray-900 rounded-lg overflow-hidden">
             <summary className="px-4 py-2 bg-gray-800 border-b border-gray-700 text-sm font-medium cursor-pointer">
               Container ({containerLogs.length} lineas)
             </summary>
@@ -171,8 +175,8 @@ export function ProcessingView({ jobId, onReady }: Props) {
           </details>
         )}
 
-        <p className="text-gray-600 text-xs text-center mt-4">
-          Esto puede tardar unos minutos dependiendo de la duracion del video
+        <p className="text-gray-600 text-xs text-center">
+          Workflow procesa sin timeout: audio, transcripcion y analisis
         </p>
       </div>
     </div>
