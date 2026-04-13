@@ -151,7 +151,7 @@ export function HomeView({ onUpload, onSelectVideo, onViewOutput }: Props) {
             {menuTasks.length === 0 ? (
               <p className="px-4 py-2 text-xs text-gray-500">Sin outputs generados</p>
             ) : (
-              menuTasks.map((t, i) => (
+              menuTasks.map((t) => (
                 <button
                   key={t.id}
                   onClick={(e) => {
@@ -159,10 +159,10 @@ export function HomeView({ onUpload, onSelectVideo, onViewOutput }: Props) {
                     setMenuVideoId(null)
                     onViewOutput(t.id)
                   }}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 cursor-pointer flex items-center justify-between gap-3"
                 >
-                  <span>Output {i + 1}</span>
-                  <span className="text-xs text-gray-500">{formatDate(t.created_at)}</span>
+                  <span className="text-gray-300">{formatDate(t.created_at)}</span>
+                  <span className="text-xs text-gray-500 font-mono">{t.id.slice(0, 8)}</span>
                 </button>
               ))
             )}
