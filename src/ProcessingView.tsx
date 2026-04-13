@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { getJobStatus, startTranscription, getTranscript } from './api'
 import type { JobStatus, LogEntry } from './types'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.workers.dev'
+
 interface Props {
   jobId: string
   onReady: (job: JobStatus) => void
@@ -27,6 +29,7 @@ const LEVEL_COLORS: Record<string, string> = {
 export function ProcessingView({ jobId, onReady }: Props) {
   const [status, setStatus] = useState<JobStatus | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [containerLogs, setContainerLogs] = useState<string[]>([])
   const [transcriptionStarted, setTranscriptionStarted] = useState(false)
 
   const poll = useCallback(async () => {
@@ -34,6 +37,18 @@ export function ProcessingView({ jobId, onReady }: Props) {
       const job = await getJobStatus(jobId)
       setStatus(job)
       if (job.logs) setLogs(job.logs)
+
+      // Fetch container logs when processing
+      if (job.status === 'processing' || job.status === 'done') {
+        try {
+          const resp = await fetch(`${API_BASE}/logs/${jobId}`)
+          if (resp.ok) {
+            const text = await resp.text()
+            const lines = text.split('\n').filter(Boolean).slice(-15)
+            setContainerLogs(lines)
+          }
+        } catch {}
+      }
 
       // When audio extraction is done, start transcription
       if (job.status === 'done' && !transcriptionStarted) {
@@ -118,7 +133,21 @@ export function ProcessingView({ jobId, onReady }: Props) {
           </div>
         </div>
 
-        <p className="text-gray-600 text-xs text-center">
+        {/* Container logs */}
+        {containerLogs.length > 0 && (
+          <details className="bg-gray-900 rounded-lg overflow-hidden mt-4">
+            <summary className="px-4 py-2 bg-gray-800 border-b border-gray-700 text-sm font-medium cursor-pointer">
+              Container ({containerLogs.length} lineas)
+            </summary>
+            <div className="max-h-48 overflow-y-auto p-3 space-y-0.5 font-mono text-xs text-gray-500">
+              {containerLogs.map((line, i) => (
+                <div key={i} className={line.includes('ERROR') ? 'text-red-400' : ''}>{line}</div>
+              ))}
+            </div>
+          </details>
+        )}
+
+        <p className="text-gray-600 text-xs text-center mt-4">
           Esto puede tardar unos minutos dependiendo de la duracion del video
         </p>
       </div>
