@@ -19,6 +19,7 @@ export function EditorView({ job }: Props) {
   const [duration, setDuration] = useState(0)
   const [segments, setSegments] = useState<Segment[]>([])
   const [lockedSegmentId, setLockedSegmentId] = useState<string | null>(null)
+  const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null)
 
   const blocks = job.blocks || []
   const words = job.transcript?.words || []
@@ -80,6 +81,8 @@ export function EditorView({ job }: Props) {
         <TranscriptPanel
           blocks={blocks}
           words={words}
+          segments={segments}
+          highlightedSegmentId={highlightedSegmentId}
           currentTime={currentTime}
           onPlay={playFrom}
           onSeek={seekTo}
@@ -134,7 +137,9 @@ export function EditorView({ job }: Props) {
               customerCode={STREAM_CUSTOMER_CODE}
               duration={duration}
               lockedSegmentId={lockedSegmentId}
+              highlightedSegmentId={highlightedSegmentId}
               onLock={setLockedSegmentId}
+              onHighlight={setHighlightedSegmentId}
               onUpdate={updateSegment}
               onRemove={removeSegment}
               onSeek={seekTo}

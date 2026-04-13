@@ -7,7 +7,9 @@ interface Props {
   customerCode: string
   duration: number
   lockedSegmentId: string | null
+  highlightedSegmentId: string | null
   onLock: (id: string | null) => void
+  onHighlight: (id: string | null) => void
   onUpdate: (id: string, updates: Partial<Segment>) => void
   onRemove: (id: string) => void
   onSeek: (time: number) => void
@@ -98,7 +100,7 @@ function RangeSlider({ inTime, outTime, duration, onChange, onSeek }: {
   )
 }
 
-export function SegmentList({ segments, videoUid, customerCode, duration, lockedSegmentId, onLock, onUpdate, onRemove, onSeek }: Props) {
+export function SegmentList({ segments, videoUid, customerCode, duration, lockedSegmentId, highlightedSegmentId, onLock, onHighlight, onUpdate, onRemove, onSeek }: Props) {
 
   if (segments.length === 0) {
     return (
@@ -114,17 +116,22 @@ export function SegmentList({ segments, videoUid, customerCode, duration, locked
       {segments.map((seg) => {
         const complete = seg.inTime !== null && seg.outTime !== null
         const isExpanded = lockedSegmentId === seg.id
+        const isHighlighted = highlightedSegmentId === seg.id
         return (
           <div
             key={seg.id}
-            className={`bg-gray-900 rounded-lg p-3 transition-colors ${isExpanded ? 'ring-1 ring-blue-500' : 'hover:bg-gray-900/80'}`}
+            className={`bg-gray-900 rounded-lg p-3 transition-colors ${isHighlighted ? 'ring-1 ring-blue-500' : isExpanded ? 'ring-1 ring-gray-600' : 'hover:bg-gray-900/80'}`}
           >
             <div
               className="flex items-center gap-4 cursor-pointer"
               onClick={() => {
+                const newId = isHighlighted ? null : seg.id
+                onHighlight(newId)
+                if (seg.inTime !== null && !isHighlighted) onSeek(seg.inTime)
+              }}
+              onDoubleClick={() => {
                 const newId = isExpanded ? null : seg.id
                 onLock(newId)
-                if (seg.inTime !== null && !isExpanded) onSeek(seg.inTime)
               }}
             >
               {/* Thumbnail del punto IN */}
