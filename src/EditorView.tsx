@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { Stream } from '@cloudflare/stream-react'
 import type { StreamPlayerApi } from '@cloudflare/stream-react'
-import type { JobStatus, Segment, TranscriptWord } from './types'
+import type { JobStatus, Segment, TranscriptWord, SuggestedSegment } from './types'
 import { formatTime } from './utils'
 import { Timeline } from './Timeline'
 import { SegmentList } from './SegmentList'
@@ -12,15 +12,24 @@ const STREAM_CUSTOMER_CODE = import.meta.env.VITE_STREAM_CUSTOMER_CODE || 'wh3wn
 
 interface Props {
   job: JobStatus
+  suggestedSegments?: SuggestedSegment[]
   onTaskCreated: (taskId: string) => void
   onBack: () => void
 }
 
-export function EditorView({ job, onTaskCreated, onBack }: Props) {
+export function EditorView({ job, suggestedSegments, onTaskCreated, onBack }: Props) {
   const streamRef = useRef<StreamPlayerApi>(undefined)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [segments, setSegments] = useState<Segment[]>([])
+  const [segments, setSegments] = useState<Segment[]>(() => {
+    if (!suggestedSegments?.length) return []
+    return suggestedSegments.map(s => ({
+      id: crypto.randomUUID(),
+      name: s.name,
+      inTime: s.startTime,
+      outTime: s.endTime,
+    }))
+  })
   const [lockedSegmentId, setLockedSegmentId] = useState<string | null>(null)
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null)
   const [panelWidth, setPanelWidth] = useState(384) // 24rem = 384px

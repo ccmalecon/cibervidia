@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { JobStatus, VideoSummary } from './types'
+import type { JobStatus, VideoSummary, SuggestedSegment } from './types'
 import { HomeView } from './HomeView'
 import { UploadView } from './UploadView'
 import { ProcessingView } from './ProcessingView'
@@ -29,6 +29,7 @@ export default function App() {
   const { path, navigate } = useRoute()
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobData, setJobData] = useState<JobStatus | null>(null)
+  const [suggested, setSuggested] = useState<SuggestedSegment[] | undefined>(undefined)
 
   // Route: /upload
   if (path === '/upload') {
@@ -66,6 +67,7 @@ export default function App() {
       return (
         <EditorView
           job={jobData}
+          suggestedSegments={suggested}
           onTaskCreated={(taskId) => navigate(`/process/${taskId}`)}
           onBack={() => navigate('/')}
         />
@@ -76,7 +78,7 @@ export default function App() {
     return (
       <EditorLoader
         videoId={videoId}
-        onLoaded={(job) => setJobData(job)}
+        onLoaded={(job, sug) => { setJobData(job); setSuggested(sug) }}
         onTaskCreated={(taskId) => navigate(`/process/${taskId}`)}
         onBack={() => navigate('/')}
       />
@@ -138,11 +140,12 @@ export default function App() {
 // Loads video data from D1 then renders EditorView
 function EditorLoader({ videoId, onLoaded, onTaskCreated, onBack }: {
   videoId: string
-  onLoaded: (job: JobStatus) => void
+  onLoaded: (job: JobStatus, suggested?: SuggestedSegment[]) => void
   onTaskCreated: (taskId: string) => void
   onBack: () => void
 }) {
   const [job, setJob] = useState<JobStatus | null>(null)
+  const [sug, setSug] = useState<SuggestedSegment[] | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -158,12 +161,13 @@ function EditorLoader({ videoId, onLoaded, onTaskCreated, onBack }: {
         blocks: full.blocks || undefined,
       }
       setJob(j)
-      onLoaded(j)
+      setSug(full.suggested_segments || undefined)
+      onLoaded(j, full.suggested_segments || undefined)
     }).catch((err) => setError(err.message))
   }, [videoId, onLoaded])
 
   if (error) return <div className="min-h-screen bg-gray-950 text-red-400 flex items-center justify-center">{error}</div>
   if (!job) return <div className="min-h-screen bg-gray-950 text-gray-500 flex items-center justify-center">Cargando video...</div>
 
-  return <EditorView job={job} onTaskCreated={onTaskCreated} onBack={onBack} />
+  return <EditorView job={job} suggestedSegments={sug} onTaskCreated={onTaskCreated} onBack={onBack} />
 }

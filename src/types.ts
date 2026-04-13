@@ -52,10 +52,18 @@ export interface VideoSummary {
   created_at: string
 }
 
+export interface SuggestedSegment {
+  name: string
+  startTime: number
+  endTime: number
+  reason: string
+}
+
 export interface VideoDetail extends VideoSummary {
   transcript_words: TranscriptWord[] | null
   blocks: ThematicBlock[] | null
   instructions: string | null
+  suggested_segments: SuggestedSegment[] | null
 }
 
 export interface TaskLogEntry {
