@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787'
+const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.workers.dev'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, options)
