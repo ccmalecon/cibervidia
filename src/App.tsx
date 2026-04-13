@@ -111,6 +111,7 @@ export default function App() {
     <HomeView
       onUpload={() => navigate('/upload')}
       onViewOutput={(taskId) => navigate(`/output/${taskId}`)}
+      onViewProcess={(taskId) => navigate(`/process/${taskId}`)}
       onSelectVideo={async (video: VideoSummary) => {
         if (video.status === 'ready' && video.stream_uid) {
           const full = await getVideo(video.id)

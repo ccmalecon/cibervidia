@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { Stream } from '@cloudflare/stream-react'
 import type { StreamPlayerApi } from '@cloudflare/stream-react'
 import type { JobStatus, Segment, TranscriptWord } from './types'
@@ -23,6 +23,8 @@ export function EditorView({ job, onTaskCreated, onBack }: Props) {
   const [segments, setSegments] = useState<Segment[]>([])
   const [lockedSegmentId, setLockedSegmentId] = useState<string | null>(null)
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null)
+  const [panelWidth, setPanelWidth] = useState(384) // 24rem = 384px
+  const [dragging, setDragging] = useState(false)
 
   const blocks = job.blocks || []
   const words = job.transcript?.words || []
@@ -77,6 +79,21 @@ export function EditorView({ job, onTaskCreated, onBack }: Props) {
     if (lockedSegmentId === id) setLockedSegmentId(null)
   }
 
+  // Draggable divider
+  useEffect(() => {
+    if (!dragging) return
+    const onMove = (e: MouseEvent) => {
+      setPanelWidth(Math.max(200, Math.min(800, e.clientX)))
+    }
+    const onUp = () => setDragging(false)
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [dragging])
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="flex h-screen">
@@ -89,15 +106,23 @@ export function EditorView({ job, onTaskCreated, onBack }: Props) {
         </button>
 
         {/* Left panel: Transcript */}
-        <TranscriptPanel
-          blocks={blocks}
-          words={words}
-          segments={segments}
-          highlightedSegmentId={highlightedSegmentId}
-          currentTime={currentTime}
-          onPlay={playFrom}
-          onSeek={seekTo}
-          onCreateSegment={createSegment}
+        <div style={{ width: `${panelWidth}px` }} className="shrink-0">
+          <TranscriptPanel
+            blocks={blocks}
+            words={words}
+            segments={segments}
+            highlightedSegmentId={highlightedSegmentId}
+            currentTime={currentTime}
+            onPlay={playFrom}
+            onSeek={seekTo}
+            onCreateSegment={createSegment}
+          />
+        </div>
+
+        {/* Draggable divider */}
+        <div
+          onMouseDown={() => setDragging(true)}
+          className={`w-1 shrink-0 cursor-col-resize hover:bg-blue-500 transition-colors ${dragging ? 'bg-blue-500' : 'bg-gray-800'}`}
         />
 
         {/* Right panel: Video + segments */}

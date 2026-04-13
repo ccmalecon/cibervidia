@@ -124,7 +124,7 @@ export function TranscriptPanel({ blocks, words, segments, highlightedSegmentId,
   let prevBlockIdx = -1
 
   return (
-    <div className="w-96 border-r border-gray-800 flex flex-col overflow-hidden">
+    <div className="w-full h-full flex flex-col overflow-hidden">
       <div className="p-4 border-b border-gray-800">
         <h2 className="font-bold text-lg">Transcript</h2>
         <p className="text-gray-500 text-xs mt-1">{words.length} palabras / {blocks.length} bloques</p>
@@ -186,6 +186,10 @@ export function TranscriptPanel({ blocks, words, segments, highlightedSegmentId,
               )
             }
 
+            // Paragraph break on silence gap > 1.5s
+            const prevWord = wi > 0 ? words[wi - 1] : null
+            const hasGap = prevWord && (word.start - prevWord.end) > 1.5 && !blockChanged
+
             // Background: block color (subtle)
             const bgColor = bi >= 0 ? BLOCK_COLORS[bi % BLOCK_COLORS.length] : ''
 
@@ -215,6 +219,7 @@ export function TranscriptPanel({ blocks, words, segments, highlightedSegmentId,
             return (
               <span key={wi}>
                 {blockHeader}
+                {hasGap && <span className="block h-3" />}
                 <span
                   data-word-idx={wi}
                   onClick={() => {

@@ -15,9 +15,10 @@ interface Props {
   onUpload: () => void
   onSelectVideo: (video: VideoSummary) => void
   onViewOutput: (taskId: string) => void
+  onViewProcess: (taskId: string) => void
 }
 
-export function HomeView({ onUpload, onSelectVideo, onViewOutput }: Props) {
+export function HomeView({ onUpload, onSelectVideo, onViewOutput, onViewProcess }: Props) {
   const [videos, setVideos] = useState<VideoSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [menuVideoId, setMenuVideoId] = useState<string | null>(null)
@@ -54,7 +55,7 @@ export function HomeView({ onUpload, onSelectVideo, onViewOutput }: Props) {
     try {
       const resp = await fetch(`${API_BASE}/tasks/video/${videoId}`)
       const tasks: TaskSummary[] = await resp.json()
-      setMenuTasks(tasks.filter(t => t.status === 'done'))
+      setMenuTasks(tasks.filter(t => t.status === 'done' || t.status === 'processing'))
     } catch {}
   }
 
@@ -157,12 +158,16 @@ export function HomeView({ onUpload, onSelectVideo, onViewOutput }: Props) {
                   onClick={(e) => {
                     e.stopPropagation()
                     setMenuVideoId(null)
-                    onViewOutput(t.id)
+                    if (t.status === 'done') onViewOutput(t.id)
+                    else onViewProcess(t.id)
                   }}
                   className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 cursor-pointer flex items-center justify-between gap-3"
                 >
-                  <span className="text-gray-300">{formatDate(t.created_at)}</span>
-                  <span className="text-xs text-gray-500 font-mono">{t.id.slice(0, 8)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${t.status === 'done' ? 'bg-green-400' : 'bg-blue-400 animate-pulse'}`} />
+                    <span className="text-gray-300">{formatDate(t.created_at)}</span>
+                  </div>
+                  <span className="text-xs text-gray-500">{t.status === 'done' ? 'ver' : 'procesando'}</span>
                 </button>
               ))
             )}
