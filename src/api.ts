@@ -9,6 +9,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>
 }
 
+// Upload
 export async function initUpload(): Promise<{ id: string; uploadUrl: string }> {
   return request('/upload/init', { method: 'POST' })
 }
@@ -18,18 +19,13 @@ export async function uploadFileToR2(uploadUrl: string, file: File, onProgress?:
     const xhr = new XMLHttpRequest()
     xhr.open('PUT', uploadUrl)
     xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
-
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) {
-        onProgress(Math.round((e.loaded / e.total) * 100))
-      }
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
     }
-
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve()
       else reject(new Error(`Upload failed: ${xhr.status}`))
     }
-
     xhr.onerror = () => reject(new Error('Upload failed'))
     xhr.send(file)
   })
@@ -43,10 +39,12 @@ export async function completeUpload(id: string, instructions?: string): Promise
   })
 }
 
+// Job status (KV)
 export async function getJobStatus(id: string): Promise<import('./types').JobStatus> {
   return request(`/status/${id}`)
 }
 
+// Transcription
 export async function startTranscription(id: string, language?: string): Promise<{ id: string; status: string }> {
   return request(`/transcribe/${id}`, {
     method: 'POST',
@@ -65,4 +63,30 @@ export async function getTranscript(id: string): Promise<{
   error?: string
 }> {
   return request(`/transcribe/${id}`)
+}
+
+// Videos (D1)
+export async function listVideos(): Promise<import('./types').VideoSummary[]> {
+  return request('/videos')
+}
+
+export async function getVideo(id: string): Promise<import('./types').VideoDetail> {
+  return request(`/videos/${id}`)
+}
+
+// Tasks
+export async function createTask(videoId: string, segments: { name: string; in: number; out: number }[]): Promise<{ id: string }> {
+  return request('/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ videoId, segments }),
+  })
+}
+
+export async function getTask(id: string): Promise<import('./types').TaskDetail> {
+  return request(`/tasks/${id}`)
+}
+
+export async function startTaskProcessing(id: string): Promise<{ id: string; status: string }> {
+  return request(`/tasks/${id}/process`, { method: 'POST' })
 }

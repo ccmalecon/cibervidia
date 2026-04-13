@@ -6,14 +6,17 @@ import { formatTime } from './utils'
 import { Timeline } from './Timeline'
 import { SegmentList } from './SegmentList'
 import { TranscriptPanel } from './TranscriptPanel'
+import { createTask, startTaskProcessing } from './api'
 
 const STREAM_CUSTOMER_CODE = import.meta.env.VITE_STREAM_CUSTOMER_CODE || 'wh3wnchtu0i0y4kd'
 
 interface Props {
   job: JobStatus
+  onTaskCreated: (taskId: string) => void
+  onBack: () => void
 }
 
-export function EditorView({ job }: Props) {
+export function EditorView({ job, onTaskCreated, onBack }: Props) {
   const streamRef = useRef<StreamPlayerApi>(undefined)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -77,6 +80,14 @@ export function EditorView({ job }: Props) {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="flex h-screen">
+        {/* Back button overlay */}
+        <button
+          onClick={onBack}
+          className="absolute top-3 right-4 z-10 text-gray-500 hover:text-gray-300 text-sm cursor-pointer bg-gray-900/80 px-3 py-1 rounded"
+        >
+          &larr; Home
+        </button>
+
         {/* Left panel: Transcript */}
         <TranscriptPanel
           blocks={blocks}
@@ -149,9 +160,9 @@ export function EditorView({ job }: Props) {
               onSeek={seekTo}
             />
 
-            {/* Export */}
+            {/* Export as task */}
             {segments.length > 0 && (
-              <ExportButton segments={segments} />
+              <ExportButton segments={segments} videoId={job.id} onTaskCreated={onTaskCreated} />
             )}
           </div>
         </div>
@@ -203,29 +214,36 @@ function KaraokeBar({
   )
 }
 
-function ExportButton({ segments }: { segments: Segment[] }) {
-  const [show, setShow] = useState(false)
-  const json = JSON.stringify(
-    segments
+function ExportButton({ segments, videoId, onTaskCreated }: { segments: Segment[]; videoId: string; onTaskCreated: (id: string) => void }) {
+  const [loading, setLoading] = useState(false)
+
+  const handleExport = async () => {
+    const validSegments = segments
       .filter((s) => s.inTime !== null && s.outTime !== null)
-      .map((s) => ({ name: s.name, in: s.inTime, out: s.outTime })),
-    null,
-    2,
-  )
+      .map((s) => ({ name: s.name, in: s.inTime!, out: s.outTime! }))
+
+    if (validSegments.length === 0) return
+
+    setLoading(true)
+    try {
+      const { id } = await createTask(videoId, validSegments)
+      await startTaskProcessing(id)
+      onTaskCreated(id)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error creating task')
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="mt-4">
       <button
-        onClick={() => setShow(!show)}
-        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium cursor-pointer"
+        onClick={handleExport}
+        disabled={loading}
+        className="px-5 py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg font-medium cursor-pointer"
       >
-        Exportar segmentos
+        {loading ? 'Creando tarea...' : `Procesar ${segments.filter(s => s.inTime !== null && s.outTime !== null).length} segmentos`}
       </button>
-      {show && (
-        <pre className="mt-3 p-3 bg-gray-900 rounded-lg text-xs overflow-x-auto font-mono text-green-400">
-          {json}
-        </pre>
-      )}
     </div>
   )
 }

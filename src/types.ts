@@ -40,3 +40,37 @@ export interface JobStatus {
   logs?: LogEntry[]
   error?: string
 }
+
+export interface VideoSummary {
+  id: string
+  r2_key: string
+  stream_uid: string | null
+  audio_r2_key: string | null
+  transcript_text: string | null
+  status: string
+  file_size: number | null
+  created_at: string
+}
+
+export interface VideoDetail extends VideoSummary {
+  transcript_words: TranscriptWord[] | null
+  blocks: ThematicBlock[] | null
+  instructions: string | null
+}
+
+export interface TaskLogEntry {
+  ts: string
+  step: string
+  msg: string
+  level: 'info' | 'error'
+}
+
+export interface TaskDetail {
+  id: string
+  video_id: string
+  type: string
+  segments: { name: string; in: number; out: number }[]
+  status: string
+  logs: TaskLogEntry[]
+  created_at: string
+}
