@@ -1,17 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { listVideos } from './api'
 import type { VideoSummary } from './types'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.workers.dev'
 const STREAM_CUSTOMER_CODE = import.meta.env.VITE_STREAM_CUSTOMER_CODE || 'wh3wnchtu0i0y4kd'
+
+interface TaskSummary {
+  id: string
+  status: string
+  created_at: string
+}
 
 interface Props {
   onUpload: () => void
   onSelectVideo: (video: VideoSummary) => void
+  onViewOutput: (taskId: string) => void
 }
 
-export function HomeView({ onUpload, onSelectVideo }: Props) {
+export function HomeView({ onUpload, onSelectVideo, onViewOutput }: Props) {
   const [videos, setVideos] = useState<VideoSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [menuVideoId, setMenuVideoId] = useState<string | null>(null)
+  const [menuTasks, setMenuTasks] = useState<TaskSummary[]>([])
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     listVideos()
@@ -19,6 +31,32 @@ export function HomeView({ onUpload, onSelectVideo }: Props) {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  // Close menu on click outside
+  useEffect(() => {
+    if (!menuVideoId) return
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuVideoId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [menuVideoId])
+
+  const openMenu = async (e: React.MouseEvent, videoId: string) => {
+    e.stopPropagation()
+    const rect = (e.target as HTMLElement).getBoundingClientRect()
+    setMenuPos({ x: rect.left, y: rect.bottom + 4 })
+    setMenuVideoId(videoId)
+    setMenuTasks([])
+
+    try {
+      const resp = await fetch(`${API_BASE}/tasks/video/${videoId}`)
+      const tasks: TaskSummary[] = await resp.json()
+      setMenuTasks(tasks.filter(t => t.status === 'done'))
+    } catch {}
+  }
 
   const formatSize = (bytes: number | null) => {
     if (!bytes) return '--'
@@ -63,7 +101,7 @@ export function HomeView({ onUpload, onSelectVideo }: Props) {
               <div
                 key={v.id}
                 onClick={() => onSelectVideo(v)}
-                className="bg-gray-900 rounded-xl overflow-hidden hover:ring-1 hover:ring-gray-700 transition-all cursor-pointer"
+                className="bg-gray-900 rounded-xl overflow-hidden hover:ring-1 hover:ring-gray-700 transition-all cursor-pointer relative"
               >
                 {/* Thumbnail */}
                 {v.stream_uid ? (
@@ -77,6 +115,14 @@ export function HomeView({ onUpload, onSelectVideo }: Props) {
                     Sin preview
                   </div>
                 )}
+
+                {/* 3-dot menu button */}
+                <button
+                  onClick={(e) => openMenu(e, v.id)}
+                  className="absolute top-2 right-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-gray-300 cursor-pointer"
+                >
+                  ...
+                </button>
 
                 {/* Info */}
                 <div className="p-3 space-y-1">
@@ -92,6 +138,34 @@ export function HomeView({ onUpload, onSelectVideo }: Props) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Floating menu */}
+        {menuVideoId && (
+          <div
+            ref={menuRef}
+            className="fixed z-50 bg-gray-800 rounded-lg shadow-xl shadow-black/50 border border-gray-700 py-1 min-w-[200px]"
+            style={{ left: `${menuPos.x}px`, top: `${menuPos.y}px` }}
+          >
+            {menuTasks.length === 0 ? (
+              <p className="px-4 py-2 text-xs text-gray-500">Sin outputs generados</p>
+            ) : (
+              menuTasks.map((t, i) => (
+                <button
+                  key={t.id}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMenuVideoId(null)
+                    onViewOutput(t.id)
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                >
+                  <span>Output {i + 1}</span>
+                  <span className="text-xs text-gray-500">{formatDate(t.created_at)}</span>
+                </button>
+              ))
+            )}
           </div>
         )}
       </div>
