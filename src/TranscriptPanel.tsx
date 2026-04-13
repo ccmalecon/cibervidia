@@ -49,6 +49,15 @@ export function TranscriptPanel({ blocks, words, segments, highlightedSegmentId,
   // Find highlighted segment
   const highlightedSeg = highlightedSegmentId ? segments.find(s => s.id === highlightedSegmentId) : null
 
+  // Scroll to highlighted segment's first word
+  useEffect(() => {
+    if (!highlightedSeg || highlightedSeg.inTime === null || !panelRef.current) return
+    const firstWordIdx = words.findIndex(w => w.start >= highlightedSeg.inTime!)
+    if (firstWordIdx < 0) return
+    const el = panelRef.current.querySelector(`[data-word-idx="${firstWordIdx}"]`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlightedSegmentId, highlightedSeg, words])
+
   // Handle text selection
   const handleMouseUp = useCallback(() => {
     const sel = window.getSelection()
