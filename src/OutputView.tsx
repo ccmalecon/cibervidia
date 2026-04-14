@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { getTask } from './api'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.workers.dev'
+const CIBERIA_API = 'https://ciberia-article-worker.malecon.workers.dev/ciberia/api/tasks?key=kalimantan'
 
 interface TaskOutput {
   id: string
@@ -13,6 +14,7 @@ interface TaskOutput {
   title: string | null
   social_text: string | null
   connatix_id: string | null
+  ciberia_sent: boolean
   created_at: string
 }
 
@@ -23,14 +25,21 @@ interface Props {
 
 export function OutputView({ taskId, onBack }: Props) {
   const [outputs, setOutputs] = useState<TaskOutput[]>([])
+  const [fullTranscript, setFullTranscript] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       getTask(taskId),
       fetch(`${API_BASE}/tasks/${taskId}/outputs`).then(r => r.json()) as Promise<TaskOutput[]>,
-    ]).then(([_t, o]) => {
-      setOutputs(o)
+    ]).then(async ([t, o]) => {
+      setOutputs(o.map(out => ({ ...out, ciberia_sent: false })))
+      // Fetch full transcript for context
+      try {
+        const videoResp = await fetch(`${API_BASE}/videos/${t.video_id}`)
+        const video = await videoResp.json() as { transcript_text?: string }
+        setFullTranscript(video.transcript_text || '')
+      } catch {}
     }).finally(() => setLoading(false))
   }, [taskId])
 
@@ -56,8 +65,14 @@ export function OutputView({ taskId, onBack }: Props) {
           <p className="text-gray-500">No hay outputs aun. El task puede estar procesando.</p>
         ) : (
           <div className="space-y-6">
-            {outputs.map((out) => (
-              <OutputCard key={out.id} output={out} taskId={taskId} />
+            {outputs.map((out, idx) => (
+              <OutputCard
+                key={out.id}
+                output={out}
+                taskId={taskId}
+                fullTranscript={fullTranscript}
+                onUpdate={(updated) => setOutputs(prev => prev.map((o, i) => i === idx ? updated : o))}
+              />
             ))}
           </div>
         )}
@@ -66,9 +81,15 @@ export function OutputView({ taskId, onBack }: Props) {
   )
 }
 
-function OutputCard({ output: initialOutput, taskId }: { output: TaskOutput; taskId: string }) {
+function OutputCard({ output: initialOutput, taskId, fullTranscript, onUpdate }: {
+  output: TaskOutput
+  taskId: string
+  fullTranscript: string
+  onUpdate: (output: TaskOutput) => void
+}) {
   const [output, setOutput] = useState(initialOutput)
   const [sending, setSending] = useState(false)
+  const [sendingCiberia, setSendingCiberia] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const videoUrl = `${API_BASE}/download/${output.r2_key}`
@@ -80,9 +101,11 @@ function OutputCard({ output: initialOutput, taskId }: { output: TaskOutput; tas
       const resp = await fetch(`${API_BASE}/tasks/${taskId}/outputs/${output.id}/connatix`, {
         method: 'POST',
       })
-      const data = await resp.json() as { connatixId?: string; success?: boolean; error?: string }
+      const data = await resp.json() as { connatixId?: string; error?: string }
       if (data.connatixId) {
-        setOutput(prev => ({ ...prev, connatix_id: data.connatixId! }))
+        const updated = { ...output, connatix_id: data.connatixId }
+        setOutput(updated)
+        onUpdate(updated)
       } else {
         setError(data.error || 'Failed')
       }
@@ -90,6 +113,52 @@ function OutputCard({ output: initialOutput, taskId }: { output: TaskOutput; tas
       setError(err instanceof Error ? err.message : 'Error')
     } finally {
       setSending(false)
+    }
+  }
+
+  const sendToCiberia = async () => {
+    if (!output.connatix_id) {
+      setError('Primero envía a Connatix')
+      return
+    }
+    setSendingCiberia(true)
+    setError(null)
+    try {
+      const body = {
+        title: output.title || output.segment_name || 'Video CiberCuba',
+        sources: [
+          { type: 'text', value: output.social_text || output.transcript_text || '' },
+        ],
+        context_urls: [
+          { type: 'text', value: fullTranscript.slice(0, 5000) },
+        ],
+        flow: 'actualidad',
+        speed: 'rapido',
+        urgent: 1,
+        editorial_notes: 'Artículo basado en segmento de video. Usar el texto como fuente principal y el contexto para dar profundidad.',
+        connatix: 1,
+        connatix_id: output.connatix_id,
+        auto_asignado: false,
+      }
+
+      const resp = await fetch(CIBERIA_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      if (!resp.ok) {
+        const err = await resp.text()
+        throw new Error(`CiberIA: ${resp.status} ${err}`)
+      }
+
+      const updated = { ...output, ciberia_sent: true }
+      setOutput(updated)
+      onUpdate(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setSendingCiberia(false)
     }
   }
 
@@ -101,7 +170,9 @@ function OutputCard({ output: initialOutput, taskId }: { output: TaskOutput; tas
         <h3 className="font-bold text-lg">
           {output.title || output.segment_name || `Segmento ${output.segment_index + 1}`}
         </h3>
-        <div className="flex flex-wrap gap-2 mt-2">
+
+        {/* Action buttons */}
+        <div className="flex flex-wrap gap-2">
           {output.connatix_id ? (
             <span className="px-3 py-1.5 bg-green-900/50 text-green-400 rounded text-xs font-mono break-all">
               Connatix: {output.connatix_id}
@@ -115,6 +186,23 @@ function OutputCard({ output: initialOutput, taskId }: { output: TaskOutput; tas
               {sending ? 'Enviando...' : 'Connatix'}
             </button>
           )}
+
+          {output.connatix_id && !output.ciberia_sent && (
+            <button
+              onClick={sendToCiberia}
+              disabled={sendingCiberia}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded text-sm cursor-pointer"
+            >
+              {sendingCiberia ? 'Enviando...' : 'CiberIA'}
+            </button>
+          )}
+
+          {output.ciberia_sent && (
+            <span className="px-3 py-1.5 bg-purple-900/50 text-purple-400 rounded text-xs">
+              CiberIA enviado
+            </span>
+          )}
+
           <a
             href={videoUrl}
             download
