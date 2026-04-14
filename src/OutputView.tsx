@@ -134,7 +134,7 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, onUpdate }:
         ],
         flow: 'actualidad',
         speed: 'rapido',
-        urgent: 1,
+        urgent: 0,
         editorial_notes: 'Artículo basado en segmento de video. Usar el texto como fuente principal y el contexto para dar profundidad.',
         connatix: 1,
         connatix_id: output.connatix_id,
