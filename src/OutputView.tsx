@@ -98,32 +98,30 @@ function OutputCard({ output: initialOutput, taskId }: { output: TaskOutput; tas
       <video src={videoUrl} controls className="w-full max-h-[70vh]" preload="metadata" />
 
       <div className="p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="font-bold text-lg">
-            {output.title || output.segment_name || `Segmento ${output.segment_index + 1}`}
-          </h3>
-          <div className="flex gap-2 shrink-0">
-            {output.connatix_id ? (
-              <span className="px-3 py-1.5 bg-green-900/50 text-green-400 rounded text-xs">
-                Connatix: {output.connatix_id.slice(0, 8)}...
-              </span>
-            ) : (
-              <button
-                onClick={sendToConnatix}
-                disabled={sending}
-                className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded text-sm cursor-pointer"
-              >
-                {sending ? 'Enviando...' : 'Connatix'}
-              </button>
-            )}
-            <a
-              href={videoUrl}
-              download
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm cursor-pointer"
+        <h3 className="font-bold text-lg">
+          {output.title || output.segment_name || `Segmento ${output.segment_index + 1}`}
+        </h3>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {output.connatix_id ? (
+            <span className="px-3 py-1.5 bg-green-900/50 text-green-400 rounded text-xs font-mono break-all">
+              Connatix: {output.connatix_id}
+            </span>
+          ) : (
+            <button
+              onClick={sendToConnatix}
+              disabled={sending}
+              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 rounded text-sm cursor-pointer"
             >
-              Descargar
-            </a>
-          </div>
+              {sending ? 'Enviando...' : 'Connatix'}
+            </button>
+          )}
+          <a
+            href={videoUrl}
+            download
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm cursor-pointer"
+          >
+            Descargar
+          </a>
         </div>
 
         {error && <p className="text-red-400 text-xs">{error}</p>}
