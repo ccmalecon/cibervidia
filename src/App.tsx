@@ -50,8 +50,9 @@ export default function App() {
     return (
       <ProcessingView
         jobId={id}
-        onReady={(job) => {
+        onReady={(job, sug) => {
           setJobData(job)
+          setSuggested(sug)
           navigate(`/editor/${job.id}`)
         }}
       />

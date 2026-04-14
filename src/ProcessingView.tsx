@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.w
 
 interface Props {
   jobId: string
-  onReady: (job: JobStatus) => void
+  onReady: (job: JobStatus, suggestedSegments?: import('./types').SuggestedSegment[]) => void
 }
 
 const STEP_LABELS: Record<string, string> = {
@@ -48,7 +48,7 @@ export function ProcessingView({ jobId, onReady }: Props) {
               words: video.transcript_words as JobStatus['transcript'] extends undefined ? never : NonNullable<JobStatus['transcript']>['words'],
             } : undefined,
             blocks: video.blocks as JobStatus['blocks'],
-          })
+          }, video.suggested_segments as import('./types').SuggestedSegment[] | undefined)
           return
         }
       }
