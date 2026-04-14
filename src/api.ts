@@ -78,6 +78,10 @@ export async function getVideo(id: string): Promise<import('./types').VideoDetai
   return request(`/videos/${id}`)
 }
 
+export async function deleteVideo(id: string): Promise<void> {
+  await request(`/videos/${id}`, { method: 'DELETE' })
+}
+
 // Tasks
 export async function createTask(videoId: string, segments: { name: string; in: number; out: number }[]): Promise<{ id: string }> {
   return request('/tasks', {

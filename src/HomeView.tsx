@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { listVideos } from './api'
+import { listVideos, deleteVideo } from './api'
 import type { VideoSummary } from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://videoprocess.malecon.workers.dev'
@@ -171,6 +171,21 @@ export function HomeView({ onUpload, onSelectVideo, onViewOutput, onViewProcess 
                 </button>
               ))
             )}
+            {/* Delete */}
+            <div className="border-t border-gray-700 mt-1 pt-1">
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  if (!confirm('Eliminar este video?')) return
+                  await deleteVideo(menuVideoId!)
+                  setMenuVideoId(null)
+                  setVideos(prev => prev.filter(v => v.id !== menuVideoId))
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-900/30 cursor-pointer"
+              >
+                Eliminar
+              </button>
+            </div>
           </div>
         )}
       </div>
