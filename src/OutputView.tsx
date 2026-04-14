@@ -127,7 +127,7 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, onUpdate }:
       const body = {
         title: output.title || output.segment_name || 'Video CiberCuba',
         sources: [
-          { type: 'text', value: output.social_text || output.transcript_text || '' },
+          { type: 'text', value: output.transcript_text || '' },
         ],
         context_urls: [
           { type: 'text', value: fullTranscript.slice(0, 5000) },
