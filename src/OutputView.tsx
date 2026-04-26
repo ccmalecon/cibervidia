@@ -130,11 +130,11 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialIn
   const buildDefaultEditorialNotes = (): string => {
     const ov = videoOverview.trim()
     const ins = editorialInstructions.trim()
-    const overviewPart = ov ? `Contexto del video: ${ov}\n\n` : ''
-    const instructionsPart = ins
-      ? `Artículo basado en el segmento de video sobre: ${ins} Incluye citas y declaraciones del video siempre que sea posible.`
-      : 'Artículo basado en el segmento de video. Identifica el tema principal a partir del contenido y desarróllalo. Incluye citas y declaraciones del video siempre que sea posible.'
-    return overviewPart + instructionsPart
+    const intro = 'Este artículo cubre un FRAGMENTO específico de un video más amplio. El tema del artículo lo definen el TÍTULO y la TRANSCRIPCIÓN del fragmento (incluidos como fuente principal).'
+    const overviewLine = ov ? `\n\nTema y contexto del video completo (sólo referencia): ${ov}` : ''
+    const instructionsLine = ins ? `\n\nLínea editorial del video (aplica a todo el material): ${ins}` : ''
+    const closer = '\n\nCéntrate en lo que dice el fragmento; el video completo es contexto de fondo, no el centro. Incluye citas y declaraciones del fragmento siempre que sea posible.'
+    return intro + overviewLine + instructionsLine + closer
   }
 
   const openCiberiaModal = () => {
