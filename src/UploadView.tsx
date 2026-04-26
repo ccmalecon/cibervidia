@@ -33,7 +33,7 @@ export function UploadView({ onJobStarted }: Props) {
       await uploadFileToR2(uploadUrl, file, setProgress)
 
       // 3. Complete — triggers Stream + audio extraction in parallel
-      await completeUpload(id, instructions || undefined)
+      await completeUpload(id, instructions.trim())
 
       onJobStarted(id)
     } catch (err) {
@@ -90,7 +90,7 @@ export function UploadView({ onJobStarted }: Props) {
         {/* Instructions */}
         <div>
           <label className="block text-sm font-medium text-gray-400 mb-2">
-            Instrucciones editoriales (opcional)
+            Instrucciones editoriales <span className="text-red-400">*</span>
           </label>
           <textarea
             value={instructions}
@@ -124,7 +124,7 @@ export function UploadView({ onJobStarted }: Props) {
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          disabled={!file || uploading}
+          disabled={!file || !instructions.trim() || uploading}
           className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-colors cursor-pointer"
         >
           {uploading ? 'Procesando...' : 'Subir y procesar'}
