@@ -26,6 +26,7 @@ interface Props {
 export function OutputView({ taskId, onBack }: Props) {
   const [outputs, setOutputs] = useState<TaskOutput[]>([])
   const [fullTranscript, setFullTranscript] = useState('')
+  const [editorialInstructions, setEditorialInstructions] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -34,11 +35,12 @@ export function OutputView({ taskId, onBack }: Props) {
       fetch(`${API_BASE}/tasks/${taskId}/outputs`).then(r => r.json()) as Promise<TaskOutput[]>,
     ]).then(async ([t, o]) => {
       setOutputs(o.map(out => ({ ...out, ciberia_sent: false })))
-      // Fetch full transcript for context
+      // Fetch full transcript + editorial instructions for context
       try {
         const videoResp = await fetch(`${API_BASE}/videos/${t.video_id}`)
-        const video = await videoResp.json() as { transcript_text?: string }
+        const video = await videoResp.json() as { transcript_text?: string; instructions?: string | null }
         setFullTranscript(video.transcript_text || '')
+        setEditorialInstructions(video.instructions || '')
       } catch {}
     }).finally(() => setLoading(false))
   }, [taskId])
@@ -71,6 +73,7 @@ export function OutputView({ taskId, onBack }: Props) {
                 output={out}
                 taskId={taskId}
                 fullTranscript={fullTranscript}
+                editorialInstructions={editorialInstructions}
                 onUpdate={(updated) => setOutputs(prev => prev.map((o, i) => i === idx ? updated : o))}
               />
             ))}
@@ -81,10 +84,11 @@ export function OutputView({ taskId, onBack }: Props) {
   )
 }
 
-function OutputCard({ output: initialOutput, taskId, fullTranscript, onUpdate }: {
+function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialInstructions, onUpdate }: {
   output: TaskOutput
   taskId: string
   fullTranscript: string
+  editorialInstructions: string
   onUpdate: (output: TaskOutput) => void
 }) {
   const [output, setOutput] = useState(initialOutput)
@@ -134,7 +138,9 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, onUpdate }:
         ],
         flow: 'actualidad',
         speed: 'rapido',
-        editorial_notes: 'Artículo basado en segmento de video. Usar el texto como fuente principal y el contexto para dar profundidad.',
+        editorial_notes: editorialInstructions.trim()
+          ? `Artículo basado en el segmento de video sobre: ${editorialInstructions.trim()} Incluye citas y declaraciones del video siempre que sea posible.`
+          : 'Artículo basado en el segmento de video. Identifica el tema principal a partir del contenido y desarróllalo. Incluye citas y declaraciones del video siempre que sea posible.',
         connatix: 1,
         connatix_id: output.connatix_id,
         auto_asignado: false,
