@@ -63,6 +63,7 @@ export interface VideoDetail extends VideoSummary {
   transcript_words: TranscriptWord[] | null
   blocks: ThematicBlock[] | null
   instructions: string | null
+  overview: string | null
   suggested_segments: SuggestedSegment[] | null
 }
 

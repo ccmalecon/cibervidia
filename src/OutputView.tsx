@@ -27,6 +27,7 @@ export function OutputView({ taskId, onBack }: Props) {
   const [outputs, setOutputs] = useState<TaskOutput[]>([])
   const [fullTranscript, setFullTranscript] = useState('')
   const [editorialInstructions, setEditorialInstructions] = useState('')
+  const [videoOverview, setVideoOverview] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -35,12 +36,13 @@ export function OutputView({ taskId, onBack }: Props) {
       fetch(`${API_BASE}/tasks/${taskId}/outputs`).then(r => r.json()) as Promise<TaskOutput[]>,
     ]).then(async ([t, o]) => {
       setOutputs(o.map(out => ({ ...out, ciberia_sent: false })))
-      // Fetch full transcript + editorial instructions for context
+      // Fetch full transcript + editorial instructions + overview for context
       try {
         const videoResp = await fetch(`${API_BASE}/videos/${t.video_id}`)
-        const video = await videoResp.json() as { transcript_text?: string; instructions?: string | null }
+        const video = await videoResp.json() as { transcript_text?: string; instructions?: string | null; overview?: string | null }
         setFullTranscript(video.transcript_text || '')
         setEditorialInstructions(video.instructions || '')
+        setVideoOverview(video.overview || '')
       } catch {}
     }).finally(() => setLoading(false))
   }, [taskId])
@@ -74,6 +76,7 @@ export function OutputView({ taskId, onBack }: Props) {
                 taskId={taskId}
                 fullTranscript={fullTranscript}
                 editorialInstructions={editorialInstructions}
+                videoOverview={videoOverview}
                 onUpdate={(updated) => setOutputs(prev => prev.map((o, i) => i === idx ? updated : o))}
               />
             ))}
@@ -84,17 +87,21 @@ export function OutputView({ taskId, onBack }: Props) {
   )
 }
 
-function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialInstructions, onUpdate }: {
+function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialInstructions, videoOverview, onUpdate }: {
   output: TaskOutput
   taskId: string
   fullTranscript: string
   editorialInstructions: string
+  videoOverview: string
   onUpdate: (output: TaskOutput) => void
 }) {
   const [output, setOutput] = useState(initialOutput)
   const [sending, setSending] = useState(false)
   const [sendingCiberia, setSendingCiberia] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showCiberiaModal, setShowCiberiaModal] = useState(false)
+  const [modalTitle, setModalTitle] = useState('')
+  const [modalNotes, setModalNotes] = useState('')
 
   const videoUrl = `${API_BASE}/download/${output.r2_key}`
 
@@ -120,16 +127,33 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialIn
     }
   }
 
-  const sendToCiberia = async () => {
+  const buildDefaultEditorialNotes = (): string => {
+    const ov = videoOverview.trim()
+    const ins = editorialInstructions.trim()
+    const overviewPart = ov ? `Contexto del video: ${ov}\n\n` : ''
+    const instructionsPart = ins
+      ? `Artículo basado en el segmento de video sobre: ${ins} Incluye citas y declaraciones del video siempre que sea posible.`
+      : 'Artículo basado en el segmento de video. Identifica el tema principal a partir del contenido y desarróllalo. Incluye citas y declaraciones del video siempre que sea posible.'
+    return overviewPart + instructionsPart
+  }
+
+  const openCiberiaModal = () => {
     if (!output.connatix_id) {
       setError('Primero envía a Connatix')
       return
     }
+    setError(null)
+    setModalTitle(output.title || output.segment_name || 'Video CiberCuba')
+    setModalNotes(buildDefaultEditorialNotes())
+    setShowCiberiaModal(true)
+  }
+
+  const confirmSendToCiberia = async () => {
     setSendingCiberia(true)
     setError(null)
     try {
       const body = {
-        title: output.title || output.segment_name || 'Video CiberCuba',
+        title: modalTitle,
         sources: [
           { type: 'text', value: output.transcript_text || '' },
         ],
@@ -138,9 +162,7 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialIn
         ],
         flow: 'actualidad',
         speed: 'rapido',
-        editorial_notes: editorialInstructions.trim()
-          ? `Artículo basado en el segmento de video sobre: ${editorialInstructions.trim()} Incluye citas y declaraciones del video siempre que sea posible.`
-          : 'Artículo basado en el segmento de video. Identifica el tema principal a partir del contenido y desarróllalo. Incluye citas y declaraciones del video siempre que sea posible.',
+        editorial_notes: modalNotes,
         connatix: 1,
         connatix_id: output.connatix_id,
         auto_asignado: false,
@@ -160,6 +182,7 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialIn
       const updated = { ...output, ciberia_sent: true }
       setOutput(updated)
       onUpdate(updated)
+      setShowCiberiaModal(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error')
     } finally {
@@ -194,11 +217,11 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialIn
 
           {output.connatix_id && !output.ciberia_sent && (
             <button
-              onClick={sendToCiberia}
+              onClick={openCiberiaModal}
               disabled={sendingCiberia}
               className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded text-sm cursor-pointer"
             >
-              {sendingCiberia ? 'Enviando...' : 'CiberIA'}
+              CiberIA
             </button>
           )}
 
@@ -241,6 +264,61 @@ function OutputCard({ output: initialOutput, taskId, fullTranscript, editorialIn
 
         <p className="text-xs text-gray-600 font-mono">{output.r2_key}</p>
       </div>
+
+      {showCiberiaModal && (
+        <div
+          onClick={() => !sendingCiberia && setShowCiberiaModal(false)}
+          className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+          >
+            <h3 className="text-lg font-semibold">Enviar a CiberIA</h3>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Título</label>
+              <input
+                type="text"
+                value={modalTitle}
+                onChange={(e) => setModalTitle(e.target.value)}
+                disabled={sendingCiberia}
+                className="w-full bg-gray-800 rounded-lg px-4 py-2 text-sm text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Instrucciones editoriales</label>
+              <textarea
+                value={modalNotes}
+                onChange={(e) => setModalNotes(e.target.value)}
+                disabled={sendingCiberia}
+                rows={10}
+                className="w-full bg-gray-800 rounded-lg px-4 py-2 text-sm text-gray-100 outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-60"
+              />
+            </div>
+
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowCiberiaModal(false)}
+                disabled={sendingCiberia}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmSendToCiberia}
+                disabled={sendingCiberia || !modalTitle.trim() || !modalNotes.trim()}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded text-sm cursor-pointer"
+              >
+                {sendingCiberia ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
