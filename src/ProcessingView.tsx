@@ -117,21 +117,6 @@ export function ProcessingView({ jobId, onReady }: Props) {
           </div>
         )}
 
-        {/* Retry button for stuck processing */}
-        {step === 'processing' && !status?.error && logs.length > 0 && (
-          <div className="text-center">
-            <button
-              onClick={async () => {
-                await retryProcessing(jobId)
-                poll()
-              }}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs cursor-pointer text-gray-400"
-            >
-              Reintentar
-            </button>
-          </div>
-        )}
-
         {/* Live logs */}
         <div className="bg-gray-900 rounded-lg overflow-hidden">
           <div className="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
