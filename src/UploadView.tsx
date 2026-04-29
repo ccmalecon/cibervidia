@@ -1,26 +1,74 @@
 import { useState, useRef } from 'react'
 import { initUpload, uploadFileToR2, completeUpload } from './api'
 
+const MAX_DURATION_SEC = 3600
+
+function formatDuration(sec: number): string {
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = Math.floor(sec % 60)
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+}
+
+function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const d = video.duration
+      URL.revokeObjectURL(url)
+      Number.isFinite(d) ? resolve(d) : reject(new Error('Duración inválida'))
+    }
+    video.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('No se pudo leer el video'))
+    }
+    video.src = url
+  })
+}
+
 interface Props {
   onJobStarted: (jobId: string) => void
 }
 
 export function UploadView({ onJobStarted }: Props) {
   const [file, setFile] = useState<File | null>(null)
+  const [duration, setDuration] = useState<number | null>(null)
+  const [durationError, setDurationError] = useState<string | null>(null)
   const [instructions, setInstructions] = useState('')
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const tooLong = duration !== null && duration > MAX_DURATION_SEC
+
+  const acceptFile = async (f: File) => {
+    setFile(f)
+    setDuration(null)
+    setDurationError(null)
+    setError(null)
+    try {
+      const d = await readVideoDuration(f)
+      setDuration(d)
+      if (d > MAX_DURATION_SEC) {
+        setDurationError(`El video dura ${formatDuration(d)} — máximo permitido: ${formatDuration(MAX_DURATION_SEC)}.`)
+      }
+    } catch (e) {
+      setDurationError(e instanceof Error ? e.message : 'No se pudo leer la duración')
+    }
+  }
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     const f = e.dataTransfer.files[0]
-    if (f && f.type.startsWith('video/')) setFile(f)
+    if (f && f.type.startsWith('video/')) void acceptFile(f)
   }
 
   const handleSubmit = async () => {
-    if (!file) return
+    if (!file || tooLong || durationError) return
     setUploading(true)
     setError(null)
     setProgress(0)
@@ -61,7 +109,11 @@ export function UploadView({ onJobStarted }: Props) {
           onDragOver={(e) => e.preventDefault()}
           onClick={() => inputRef.current?.click()}
           className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${
-            file ? 'border-green-500 bg-green-500/5' : 'border-gray-700 hover:border-gray-500'
+            file
+              ? durationError
+                ? 'border-red-500 bg-red-500/5'
+                : 'border-green-500 bg-green-500/5'
+              : 'border-gray-700 hover:border-gray-500'
           }`}
         >
           <input
@@ -71,13 +123,20 @@ export function UploadView({ onJobStarted }: Props) {
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0]
-              if (f) setFile(f)
+              if (f) void acceptFile(f)
             }}
           />
           {file ? (
             <div className="space-y-1">
-              <p className="text-green-400 font-medium">{file.name}</p>
-              <p className="text-gray-500 text-sm">{formatSize(file.size)}</p>
+              <p className={durationError ? 'text-red-400 font-medium' : 'text-green-400 font-medium'}>{file.name}</p>
+              <p className="text-gray-500 text-sm">
+                {formatSize(file.size)}
+                {duration !== null && ` · ${formatDuration(duration)}`}
+                {duration === null && !durationError && ' · leyendo duración…'}
+              </p>
+              {durationError && (
+                <p className="text-red-400 text-sm pt-2">{durationError}</p>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
@@ -124,7 +183,7 @@ export function UploadView({ onJobStarted }: Props) {
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          disabled={!file || !instructions.trim() || uploading}
+          disabled={!file || !instructions.trim() || uploading || tooLong || !!durationError}
           className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-colors cursor-pointer"
         >
           {uploading ? 'Procesando...' : 'Subir y procesar'}
